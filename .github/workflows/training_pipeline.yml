@@ -1,0 +1,45 @@
+# ============================================================
+# GitHub Actions — Training Pipeline
+# Runs every day automatically to retrain model with new data
+# ============================================================
+
+name: Training Pipeline (Daily)
+
+on:
+  schedule:
+    - cron: '0 2 * * *'  # Runs every day at 2:00 AM UTC
+  workflow_dispatch:       # Also allows manual trigger from GitHub UI
+
+jobs:
+  run-training-pipeline:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Download your code from GitHub
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # Step 2: Set up Python
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      # Step 3: Install all required libraries
+      - name: Install dependencies
+        run: |
+          pip install scikit-learn xgboost hopsworks joblib pandas numpy pymongo python-dotenv requests pyarrow
+
+      # Step 4: Create /tmp directory (needed for Hopsworks on Linux)
+      - name: Create temp directory
+        run: mkdir -p /tmp
+
+      # Step 5: Run the training pipeline script
+      - name: Run training pipeline
+        env:
+          AQICN_TOKEN: ${{ secrets.AQICN_TOKEN }}
+          MONGO_URI: ${{ secrets.MONGO_URI }}
+          HOPSWORKS_API_KEY: ${{ secrets.HOPSWORKS_API_KEY }}
+          HOPSWORKS_PROJECT: ${{ secrets.HOPSWORKS_PROJECT }}
+        run: |
+          python training_pipeline.py
