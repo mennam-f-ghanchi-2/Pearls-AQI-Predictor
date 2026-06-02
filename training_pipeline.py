@@ -2,9 +2,9 @@
 # STEP 2 + 3: Training Pipeline + Model Registry
 # What this script does:
 #   1. Fetches features from MongoDB
-#   2. Trains 3 models: Random Forest, Ridge, XGBoost
-#   3. Evaluates all 3 with RMSE, MAE, R²
-#   4. Saves ALL 3 models to Hopsworks Model Registry
+#   2. Trains 4 models: Random Forest, Ridge, XGBoost, LightGBM
+#   3. Evaluates all 4 with RMSE, MAE, R²
+#   4. Saves ALL 4 models to Hopsworks Model Registry
 #   5. Marks the best one clearly
 # ============================================================
 
@@ -23,6 +23,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 from xgboost import XGBRegressor
+from lightgbm import LGBMRegressor
 
 # Hopsworks
 import hopsworks
@@ -111,10 +112,10 @@ def evaluate_model(name, model, X_test, y_test):
 
 
 # ============================================================
-# FUNCTION 4: Train all 3 models
+# FUNCTION 4: Train all 4 models
 # ============================================================
 def train_all_models(X, y):
-    print("\n🚀 Training 3 models...")
+    print("\n🚀 Training 4 models...")
 
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42
@@ -135,12 +136,12 @@ def train_all_models(X, y):
     rf.fit(X_train, y_train)
     rf_metrics = evaluate_model("Random Forest", rf, X_test, y_test)
     results.append({
-        "name":        "random_forest",
-        "label":       "Random Forest",
-        "model":       rf,
-        "metrics":     rf_metrics,
+        "name":         "random_forest",
+        "label":        "Random Forest",
+        "model":        rf,
+        "metrics":      rf_metrics,
         "needs_scaler": False,
-        "X_test":      X_test,
+        "X_test":       X_test,
     })
 
     # --- Model 2: Ridge Regression ---
@@ -149,12 +150,12 @@ def train_all_models(X, y):
     ridge.fit(X_train_scaled, y_train)
     ridge_metrics = evaluate_model("Ridge Regression", ridge, X_test_scaled, y_test)
     results.append({
-        "name":        "ridge_regression",
-        "label":       "Ridge Regression",
-        "model":       ridge,
-        "metrics":     ridge_metrics,
+        "name":         "ridge_regression",
+        "label":        "Ridge Regression",
+        "model":        ridge,
+        "metrics":      ridge_metrics,
         "needs_scaler": True,
-        "X_test":      X_test_scaled,
+        "X_test":       X_test_scaled,
     })
 
     # --- Model 3: XGBoost ---
@@ -169,15 +170,35 @@ def train_all_models(X, y):
     xgb.fit(X_train, y_train)
     xgb_metrics = evaluate_model("XGBoost", xgb, X_test, y_test)
     results.append({
-        "name":        "xgboost",
-        "label":       "XGBoost",
-        "model":       xgb,
-        "metrics":     xgb_metrics,
+        "name":         "xgboost",
+        "label":        "XGBoost",
+        "model":        xgb,
+        "metrics":      xgb_metrics,
         "needs_scaler": False,
-        "X_test":      X_test,
+        "X_test":       X_test,
     })
 
-    # --- Compare all 3 ---
+    # --- Model 4: LightGBM ---
+    print("\n💡 Training LightGBM...")
+    lgbm = LGBMRegressor(
+        n_estimators=100,
+        max_depth=6,
+        learning_rate=0.1,
+        random_state=42,
+        verbose=-1
+    )
+    lgbm.fit(X_train, y_train)
+    lgbm_metrics = evaluate_model("LightGBM", lgbm, X_test, y_test)
+    results.append({
+        "name":         "lightgbm",
+        "label":        "LightGBM",
+        "model":        lgbm,
+        "metrics":      lgbm_metrics,
+        "needs_scaler": False,
+        "X_test":       X_test,
+    })
+
+    # --- Compare all 4 ---
     print("\n" + "=" * 55)
     print("🏆 MODEL COMPARISON")
     print("=" * 55)
@@ -212,7 +233,7 @@ def save_all_to_registry(results, best, scaler, feature_cols):
     scaler_path = "model_artifacts/scaler.pkl"
     joblib.dump(scaler, scaler_path)
 
-    print(f"\n📤 Saving all 3 models to registry...")
+    print(f"\n📤 Saving all 4 models to registry...")
 
     for r in results:
         is_best = (r["name"] == best["name"])
@@ -220,7 +241,7 @@ def save_all_to_registry(results, best, scaler, feature_cols):
         print(f"\n   Saving {r['label']}{tag}...")
 
         # Save model file
-        model_path = f"model_artifacts/aqi_model.pkl"
+        model_path = "model_artifacts/aqi_model.pkl"
         joblib.dump(r["model"], model_path)
 
         # Save info file
@@ -238,8 +259,7 @@ def save_all_to_registry(results, best, scaler, feature_cols):
                 f.write(f"Note         : THIS IS THE BEST MODEL\n")
 
         # Register in Hopsworks
-        # Each model gets its own name in the registry
-        registry_name = f"aqi_{r['name']}"  # e.g. aqi_random_forest
+        registry_name = f"aqi_{r['name']}"
 
         description = f"AQI {r['label']} model"
         if is_best:
@@ -258,7 +278,7 @@ def save_all_to_registry(results, best, scaler, feature_cols):
         hops_model.save("model_artifacts")
         print(f"   ✅ {r['label']} saved as '{registry_name}'")
 
-    print(f"\n✅ All 3 models saved to Hopsworks!")
+    print(f"\n✅ All 4 models saved to Hopsworks!")
     print(f"   Go to Hopsworks → Model Registry to see them")
 
 
@@ -267,22 +287,22 @@ def save_all_to_registry(results, best, scaler, feature_cols):
 # ============================================================
 def run_training_pipeline():
     print("=" * 55)
-    print("🚀 Starting Training Pipeline — 3 Models")
+    print("🚀 Starting Training Pipeline — 4 Models")
     print("=" * 55)
 
-    df                        = load_features_from_mongodb()
-    X, y, feature_cols        = prepare_data(df)
-    results, best, scaler     = train_all_models(X, y)
+    df                    = load_features_from_mongodb()
+    X, y, feature_cols    = prepare_data(df)
+    results, best, scaler = train_all_models(X, y)
     save_all_to_registry(results, best, scaler, feature_cols)
 
     print("\n" + "=" * 55)
     print("✅ Training Pipeline Complete!")
-    print(f"   Models trained : 3")
+    print(f"   Models trained : 4")
     print(f"   Best model     : {best['label']}")
     print(f"   Best RMSE      : {best['metrics']['rmse']:.4f}")
     print(f"   Best R²        : {best['metrics']['r2']:.4f}")
     print("=" * 55)
-    print("\n👉 Check Hopsworks Model Registry to see all 3 models!")
+    print("\n👉 Check Hopsworks Model Registry to see all 4 models!")
 
 
 if __name__ == "__main__":
