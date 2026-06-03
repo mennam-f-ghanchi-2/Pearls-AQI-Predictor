@@ -333,7 +333,7 @@ def get_health_advice(aqi):
         return "danger", "Health alert! Everyone may experience serious health effects. Stay indoors and keep windows closed."
     return "danger", "HAZARDOUS! Emergency conditions. Stay indoors. Seal windows and doors. Seek medical attention if unwell."
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=300)  # refreshes every 5 minutes
 def fetch_current_aqi():
     try:
         url = f"https://api.waqi.info/feed/{CITY}/?token={AQICN_TOKEN}"
@@ -345,7 +345,7 @@ def fetch_current_aqi():
         pass
     return None
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=300)  # refreshes every 5 minutes
 def load_historical_data():
     try:
         client = MongoClient(MONGO_URI)
@@ -700,7 +700,7 @@ st.markdown("""
 
 
 # ============================================================
-# EDA SECTION - Add this to your app.py after the AQI scale
+# EDA SECTION
 # ============================================================
 
 def add_eda_and_shap_sections(df_hist):
