@@ -28,7 +28,7 @@ jobs:
       # Step 3: Install all required libraries
       - name: Install dependencies
         run: |
-          pip install scikit-learn xgboost hopsworks joblib pandas numpy pymongo python-dotenv requests pyarrow
+          pip install scikit-learn xgboost lightgbm hopsworks joblib pandas numpy pymongo python-dotenv requests pyarrow
 
       # Step 4: Create /tmp directory (needed for Hopsworks on Linux)
       - name: Create temp directory
