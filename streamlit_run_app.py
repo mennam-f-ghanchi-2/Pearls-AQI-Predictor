@@ -365,6 +365,23 @@ def load_historical_data():
         pass
     return None
 
+@st.cache_data(ttl=300)  # refreshes every 5 minutes
+def fetch_weather():
+    try:
+        key = os.getenv("OPENWEATHER_KEY")
+        url = f"https://api.openweathermap.org/data/2.5/weather?q=Karachi&appid={key}&units=metric"
+        r = requests.get(url, timeout=10)
+        data = r.json()
+        return {
+            "temp":     round(data["main"]["temp"], 1),
+            "humidity": data["main"]["humidity"],
+            "wind":     round(data["wind"]["speed"], 1),
+            "pressure": data["main"]["pressure"],
+        }
+    except:
+        return None
+
+
 def make_predictions(current_data):
     """Generate 3-day AQI forecast using simple pattern"""
     try:
@@ -462,10 +479,11 @@ if raw:
         """, unsafe_allow_html=True)
 
     with col2:
-        temp = iaqi.get("t", {}).get("v", "N/A")
-        humidity = iaqi.get("h", {}).get("v", "N/A")
-        wind = iaqi.get("w", {}).get("v", "N/A")
-        pressure = iaqi.get("p", {}).get("v", "N/A")
+        weather  = fetch_weather()
+        temp     = weather["temp"]     if weather else iaqi.get("t", {}).get("v", "N/A")
+        humidity = weather["humidity"] if weather else iaqi.get("h", {}).get("v", "N/A")
+        wind     = weather["wind"]     if weather else iaqi.get("w", {}).get("v", "N/A")
+        pressure = weather["pressure"] if weather else iaqi.get("p", {}).get("v", "N/A")
 
         st.markdown(f"""
         <div class="metric-card" style="margin-bottom:12px">
