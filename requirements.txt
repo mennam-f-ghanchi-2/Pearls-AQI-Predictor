@@ -1,0 +1,15 @@
+streamlit
+plotly
+pandas
+numpy
+pymongo
+requests
+python-dotenv
+joblib
+scikit-learn
+xgboost
+lightgbm
+shap
+matplotlib
+pyarrow
+hopsworks
