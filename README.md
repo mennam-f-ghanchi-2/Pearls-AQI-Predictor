@@ -170,12 +170,12 @@ Four regression models were trained and registered to Hopsworks Model Registry:
 | LightGBM | 14.18 | 0.5357 | 15.26 |
 | XGBoost | 14.17 | 0.5294 | 15.36 |
 
-> ✅ **Best Model:** Ridge Regression — lowest MAE and RMSE, highest R²  
+>  **Best Model:** Ridge Regression — lowest MAE and RMSE, highest R²  
 > All models are registered in Hopsworks. The best model is used for inference in the Streamlit app.
 
 ---
 
-## 📊 Dashboard
+## Dashboard
 
 The Streamlit app includes:
 
@@ -192,7 +192,7 @@ The app uses `streamlit-autorefresh` to pull new data periodically without a man
 
 ---
 
-## 📸 App Screenshots
+##  App Screenshots
 
 ### Exploratory Data Analysis — Hourly & Weekly Patterns
 
@@ -214,7 +214,7 @@ The app uses `streamlit-autorefresh` to pull new data periodically without a man
 
 ---
 
-## 🎨 AQI Scale
+##  AQI Scale
 
 | Range | Category | Who's at risk |
 |---|---|---|
@@ -227,7 +227,7 @@ The app uses `streamlit-autorefresh` to pull new data periodically without a man
 
 ---
 
-## 📦 Requirements
+##  Requirements
 
 ```
 streamlit
