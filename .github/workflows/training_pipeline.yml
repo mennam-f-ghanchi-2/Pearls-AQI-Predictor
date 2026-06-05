@@ -2,7 +2,7 @@ name: Training Pipeline
 
 on:
   schedule:
-    - cron: '30 * * * *'  # Every hour at :30 (runs after feature pipeline)
+    - cron: '0 0 * * *'  # Once a day at midnight UTC
   workflow_dispatch:       # Allow manual trigger too
 
 jobs:
