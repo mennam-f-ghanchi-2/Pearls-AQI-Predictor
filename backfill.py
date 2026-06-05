@@ -20,7 +20,7 @@ CITY        = "karachi"
 
 def fetch_raw_data():
     """Fetches and averages data from multiple Karachi stations for backfill."""
-    stations = ["karachi", "@401143", "@545395"]
+    stations = ["karachi", "@401143"]
     valid_data = []
     
     for st_id in stations:

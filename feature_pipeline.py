@@ -26,7 +26,7 @@ def fetch_raw_data(city: str) -> dict:
     to create a true city-wide representation.
     """
     print("📡 Fetching and aggregating multi-station AQI data...")
-    stations = ["karachi", "@401143", "@545395"]
+    stations = ["karachi", "@401143"]
     valid_data = []
     
     for st_id in stations:
