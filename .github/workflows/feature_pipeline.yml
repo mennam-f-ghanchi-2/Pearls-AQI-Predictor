@@ -1,16 +1,16 @@
-name: Feature Pipeline (Hourly)
+name: Feature Pipeline
 
 on:
   schedule:
-    - cron: '0 * * * *'
-  workflow_dispatch:
+    - cron: '0 * * * *'  # Every hour
+  workflow_dispatch:      # Allow manual trigger too
 
 jobs:
   run-feature-pipeline:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v3
 
       - name: Set up Python
@@ -19,14 +19,10 @@ jobs:
           python-version: '3.10'
 
       - name: Install dependencies
-        run: |
-          pip install requests pymongo python-dotenv pandas hopsworks
+        run: pip install -r requirements.txt
 
-      - name: Run feature pipeline
+      - name: Run Feature Pipeline
         env:
           AQICN_TOKEN: ${{ secrets.AQICN_TOKEN }}
           MONGO_URI: ${{ secrets.MONGO_URI }}
-          HOPSWORKS_API_KEY: ${{ secrets.HOPSWORKS_API_KEY }}
-          HOPSWORKS_PROJECT: ${{ secrets.HOPSWORKS_PROJECT }}
-        run: |
-          python feature_pipeline.py
+        run: python feature_pipeline.py
