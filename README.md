@@ -155,6 +155,7 @@ All 4 are saved to Hopsworks. The model with the lowest RMSE is marked as best.
 ### Input Features
 
 ```
+```
 pm25  pm10  o3  no2  so2  co
 temperature  humidity  wind_speed  pressure
 hour  day_of_week  month  is_weekend  aqi_change_rate
@@ -171,7 +172,6 @@ Four regression models were trained and registered to Hopsworks Model Registry:
 
 > ✅ **Best Model:** Ridge Regression — lowest MAE and RMSE, highest R²  
 > All models are registered in Hopsworks. The best model is used for inference in the Streamlit app.
-```
 
 ---
 
