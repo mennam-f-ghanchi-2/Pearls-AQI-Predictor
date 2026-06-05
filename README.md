@@ -158,6 +158,19 @@ All 4 are saved to Hopsworks. The model with the lowest RMSE is marked as best.
 pm25  pm10  o3  no2  so2  co
 temperature  humidity  wind_speed  pressure
 hour  day_of_week  month  is_weekend  aqi_change_rate
+## 📊 Model Performance
+
+Four regression models were trained and registered to Hopsworks Model Registry:
+
+| Model | MAE | R² | RMSE |
+|---|---|---|---|
+| **Ridge Regression** ⭐ | **14.08** | **0.5754** | **14.59** |
+| Random Forest | 14.20 | 0.5433 | 15.13 |
+| LightGBM | 14.18 | 0.5357 | 15.26 |
+| XGBoost | 14.17 | 0.5294 | 15.36 |
+
+> ✅ **Best Model:** Ridge Regression — lowest MAE and RMSE, highest R²  
+> All models are registered in Hopsworks. The best model is used for inference in the Streamlit app.
 ```
 
 ---
@@ -234,17 +247,5 @@ pyarrow
 hopsworks==3.7.0
 streamlit-autorefresh
 ```
-## 📊 Model Performance
 
-Four regression models were trained and registered to Hopsworks Model Registry:
-
-| Model | MAE | R² | RMSE |
-|---|---|---|---|
-| **Ridge Regression** ⭐ | **14.08** | **0.5754** | **14.59** |
-| Random Forest | 14.20 | 0.5433 | 15.13 |
-| LightGBM | 14.18 | 0.5357 | 15.26 |
-| XGBoost | 14.17 | 0.5294 | 15.36 |
-
-> ✅ **Best Model:** Ridge Regression — lowest MAE and RMSE, highest R²  
-> All models are registered in Hopsworks. The best model is used for inference in the Streamlit app.
 
