@@ -2,7 +2,7 @@
 
 > A real-time air quality intelligence system powered by multi-station aggregation, ML model comparison, and SHAP explainability.
 
-[🚀 Live App](https://pearls-aqi-predictor-kci3mkvihenbkucn5azjmp.streamlit.app/)
+[Live App](https://pearls-aqi-predictor-kci3mkvihenbkucn5azjmp.streamlit.app/)
 
 
 ---
