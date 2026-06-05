@@ -192,26 +192,6 @@ The app uses `streamlit-autorefresh` to pull new data periodically without a man
 
 ---
 
-##  App Screenshots
-
-### Exploratory Data Analysis — Hourly & Weekly Patterns
-
-![AQI by Hour and Day of Week](eda_hourly_weekly.png)
-
-> AQI peaks in the early morning hours (0–4am) and drops mid-day. Thursday shows the highest average AQI among weekdays.
-
-### AQI Distribution & Weekday vs Weekend
-
-![AQI Distribution and Weekend Comparison](eda_distribution_weekend.png)
-
-> Most AQI readings fall in the 60–80 range. Weekday AQI averages around 74.5 — weekend data was not present in this sample window.
-
-### SHAP Feature Importance
-
-![SHAP Feature Importance](eda_shap.png)
-
-> **PM2.5 dominates predictions** with a SHAP value of 11.755 — far ahead of `day_of_week` (2.747) and `month` (1.257). Weather features like temperature, humidity, and wind speed had negligible impact on this dataset.
-
 ---
 
 ##  AQI Scale
