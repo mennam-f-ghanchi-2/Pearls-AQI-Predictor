@@ -1,8 +1,8 @@
 # ============================================================
 # STEP 1: Feature Pipeline
 # What this script does:
-#   1. Fetches AQI + pollutant data from AQICN API
-#   2. Computes useful features from that raw data
+#   1. Fetches AQI + pollutant data from multiple stations
+#   2. Computes useful features from that averaged data
 #   3. Saves the features into MongoDB
 # ============================================================
 
@@ -13,133 +13,98 @@ from datetime import datetime
 from pymongo import MongoClient
 from dotenv import load_dotenv
 
-# ---------------------------------------------------------
-# Load your secret keys from the .env file
-# ---------------------------------------------------------
 load_dotenv()
 
-OPENWEATHER_API_KEY = os.getenv("AQICN_TOKEN")   # Your AQICN API token
-MONGO_URI   = os.getenv("MONGO_URI")     # Your MongoDB connection string
+OPENWEATHER_API_KEY = os.getenv("AQICN_TOKEN")   
+MONGO_URI   = os.getenv("MONGO_URI")     
 
-# ---------------------------------------------------------
-# CHANGE THIS to your city name (e.g. "karachi", "london")
-# ---------------------------------------------------------
 CITY = "karachi"
 
-# ============================================================
-# FUNCTION 1: Fetch raw data from AQICN API
-# ============================================================
 def fetch_raw_data(city: str) -> dict:
     """
-    Calls the AQICN API and returns raw air quality data.
-    Returns a dictionary with AQI and pollutant readings.
+    Fetches and averages data from multiple Karachi stations 
+    to create a true city-wide representation.
     """
-    url = f"https://api.waqi.info/feed/{city}/?token={OPENWEATHER_API_KEY}"
+    print("📡 Fetching and aggregating multi-station AQI data...")
+    stations = ["karachi", "@401143", "@545395"]
+    valid_data = []
     
-    print(f"📡 Fetching AQI data for: {city}")
-    response = requests.get(url)
-    
-    # Check if the API call worked
-    if response.status_code != 200:
-        raise Exception(f"API call failed with status: {response.status_code}")
-    
-    data = response.json()
-    
-    # Check if AQICN returned a valid response
-    if data["status"] != "ok":
-        raise Exception(f"AQICN API error: {data.get('data', 'Unknown error')}")
-    
-    print("✅ Raw data fetched successfully!")
-    return data["data"]   # Return just the 'data' part
+    for st_id in stations:
+        url = f"https://api.waqi.info/feed/{st_id}/?token={OPENWEATHER_API_KEY}"
+        try:
+            r = requests.get(url, timeout=5).json()
+            if r.get("status") == "ok":
+                valid_data.append(r["data"])
+        except:
+            continue
+            
+    if not valid_data:
+        raise Exception("API call failed for all stations.")
 
+    # Average the AQI
+    avg_aqi = int(sum(d.get("aqi", 0) for d in valid_data if type(d.get("aqi")) in [int, float]) / len(valid_data))
+    
+    # Average the pollutants
+    avg_iaqi = {}
+    for key in ["pm25", "pm10", "o3", "no2", "so2", "co", "t", "h", "w", "p"]:
+        vals = [d.get("iaqi", {}).get(key, {}).get("v") for d in valid_data if d.get("iaqi", {}).get(key)]
+        vals = [v for v in vals if v is not None]
+        if vals:
+            avg_iaqi[key] = {"v": round(sum(vals) / len(vals), 1)}
 
-# ============================================================
-# FUNCTION 2: Compute features from raw data
-# ============================================================
+    print(f"✅ Data aggregated! True City Average AQI: {avg_aqi}")
+    
+    master_data = valid_data[0].copy()
+    master_data["aqi"] = avg_aqi
+    master_data["iaqi"] = avg_iaqi
+    
+    return master_data
+
 def compute_features(raw: dict) -> dict:
-    """
-    Takes raw API data and extracts + computes useful features.
-    These features are what the ML model will learn from.
-    """
     now = datetime.utcnow()
-    
-    # --- Helper: safely get a pollutant value ---
-    # Some cities may not have all pollutants, so we use .get() safely
     iaqi = raw.get("iaqi", {})
     
     def get_val(key):
-        return iaqi.get(key, {}).get("v", None)  # Returns None if missing
+        return iaqi.get(key, {}).get("v", None)  
     
     features = {
-        # === Identity ===
         "city":        CITY,
-        "timestamp":   now,                        # When we fetched this
-        
-        # === Target variable (what we want to predict) ===
-        "aqi":         raw.get("aqi", None),       # The AQI value right now
-        
-        # === Pollutants (model inputs) ===
-        "pm25":        get_val("pm25"),  # Fine particles (most important!)
-        "pm10":        get_val("pm10"),  # Coarse particles
-        "o3":          get_val("o3"),    # Ozone
-        "no2":         get_val("no2"),   # Nitrogen dioxide
-        "so2":         get_val("so2"),   # Sulfur dioxide
-        "co":          get_val("co"),    # Carbon monoxide
-        
-        # === Weather features ===
-        "temperature": get_val("t"),     # Temperature in °C
-        "humidity":    get_val("h"),     # Humidity %
-        "wind_speed":  get_val("w"),     # Wind speed
-        "pressure":    get_val("p"),     # Atmospheric pressure
-        
-        # === Time-based features ===
-        # These help the model learn daily/weekly patterns
-        "hour":        now.hour,          # 0–23 (rush hour vs midnight)
-        "day_of_week": now.weekday(),     # 0=Monday, 6=Sunday
-        "month":       now.month,         # 1–12 (seasonal patterns)
-        "is_weekend":  int(now.weekday() >= 5),  # 1 if Saturday/Sunday
+        "timestamp":   now,                       
+        "aqi":         raw.get("aqi", None),       
+        "pm25":        get_val("pm25"),  
+        "pm10":        get_val("pm10"),  
+        "o3":          get_val("o3"),    
+        "no2":         get_val("no2"),   
+        "so2":         get_val("so2"),   
+        "co":          get_val("co"),    
+        "temperature": get_val("t"),     
+        "humidity":    get_val("h"),     
+        "wind_speed":  get_val("w"),     
+        "pressure":    get_val("p"),     
+        "hour":        now.hour,          
+        "day_of_week": now.weekday(),     
+        "month":       now.month,         
+        "is_weekend":  int(now.weekday() >= 5),  
     }
     
     print(f"🔧 Features computed. AQI = {features['aqi']}")
     return features
 
-
-# ============================================================
-# FUNCTION 3: Save features to MongoDB
-# ============================================================
 def save_to_mongodb(features: dict):
-    """
-    Connects to MongoDB and inserts the feature record.
-    Each call to this function adds one new row to the database.
-    """
     client = MongoClient(MONGO_URI)
-    
-    db         = client["aqi_db"]        # Database name
-    collection = db["features"]          # Collection (like a table) name
-    
+    db         = client["aqi_db"]        
+    collection = db["features"]          
     result = collection.insert_one(features)
-    
     print(f"💾 Saved to MongoDB with ID: {result.inserted_id}")
     client.close()
 
-
-# ============================================================
-# FUNCTION 4: Compute AQI change rate (needs last saved record)
-# ============================================================
 def get_aqi_change_rate(current_aqi: float) -> float:
-    """
-    Looks at the last saved AQI value in MongoDB,
-    and computes how much AQI has changed since then.
-    This is a derived feature — useful for the model.
-    """
     try:
         client     = MongoClient(MONGO_URI)
         collection = client["aqi_db"]["features"]
-        
-        # Get the most recent record for this city
         last_record = collection.find_one(
             {"city": CITY, "aqi": {"$ne": None}},
-            sort=[("timestamp", -1)]   # Sort by newest first
+            sort=[("timestamp", -1)]   
         )
         client.close()
         
@@ -148,34 +113,25 @@ def get_aqi_change_rate(current_aqi: float) -> float:
             print(f"📈 AQI change rate: {change_rate:+.1f}")
             return change_rate
         else:
-            return 0.0   # No previous record found
+            return 0.0   
             
     except Exception as e:
         print(f"⚠️  Could not compute change rate: {e}")
         return 0.0
 
-
-# ============================================================
-# MAIN: Run the full pipeline
-# ============================================================
 def run_pipeline():
     print("=" * 50)
     print("🚀 Starting Feature Pipeline")
     print("=" * 50)
     
-    # Step 1: Fetch raw data
     raw = fetch_raw_data(CITY)
-    
-    # Step 2: Compute features
     features = compute_features(raw)
     
-    # Step 3: Add AQI change rate (derived feature)
     if features["aqi"]:
         features["aqi_change_rate"] = get_aqi_change_rate(features["aqi"])
     else:
         features["aqi_change_rate"] = 0.0
     
-    # Step 4: Save to MongoDB
     save_to_mongodb(features)
     
     print("=" * 50)
@@ -184,12 +140,8 @@ def run_pipeline():
     
     return features
 
-
-# Run when you execute: python feature_pipeline.py
 if __name__ == "__main__":
     result = run_pipeline()
-    
-    # Print a nice summary
     print("\n📊 Summary of saved record:")
     for key, val in result.items():
         if key not in ["_id"]:
