@@ -21,6 +21,22 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Debug - Test AQICN API token
+        env:
+          AQICN_TOKEN: ${{ secrets.AQICN_TOKEN }}
+        run: |
+          echo "🔍 Testing AQICN API token..."
+          echo "Token starts with: ${AQICN_TOKEN:0:6}..."
+          curl -s "https://api.waqi.info/feed/karachi/?token=$AQICN_TOKEN" | python3 -c "
+          import sys, json
+          data = json.load(sys.stdin)
+          print('API Status:', data.get('status'))
+          if data.get('status') == 'ok':
+              print('✅ Token is valid! AQI:', data['data'].get('aqi'))
+          else:
+              print('❌ Token failed. Response:', data)
+          "
+
       - name: Run Feature Pipeline
         env:
           AQICN_TOKEN: ${{ secrets.AQICN_TOKEN }}
