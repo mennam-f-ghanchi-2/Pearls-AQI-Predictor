@@ -7,6 +7,7 @@ import joblib
 import numpy as np
 import pandas as pd
 import streamlit as st
+from streamlit_autorefresh import st_autorefresh
 import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime, timedelta
@@ -325,7 +326,7 @@ def get_health_advice(aqi):
 def fetch_current_aqi():
     """Aggregates data from multiple Karachi stations for a true city average."""
     try:
-        stations = ["karachi", "@401143", "@545395"]
+        stations = ["karachi", "@401143"]
         valid_data = []
         
         for st_id in stations:
@@ -429,6 +430,10 @@ def make_predictions(current_data):
 # ============================================================
 # MAIN APP
 # ============================================================
+
+# Automatically refresh the page every 5 minutes (300,000 milliseconds)
+st_autorefresh(interval=300000, limit=None, key="aqi_auto_refresh")
+
 st.markdown("""
 <div class="hero">
     <div class="hero-tag">🌬️ Real-time Air Quality Intelligence</div>
