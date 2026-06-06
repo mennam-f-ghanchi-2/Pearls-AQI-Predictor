@@ -1,8 +1,9 @@
 Model type   : lightgbm
-Is best      : False
-Trained at   : 2026-06-06 16:29:04.750249
-RMSE         : 11.9645
-MAE          : 9.4625
-R2           : 0.7290
+Is best      : True
+Trained at   : 2026-06-06 20:01:04.451748
+RMSE         : 11.9153
+MAE          : 9.4431
+R2           : 0.7223
 Needs scaler : False
 Features     : ['pm25', 'pm10', 'o3', 'no2', 'so2', 'co', 'temperature', 'humidity', 'wind_speed', 'pressure', 'hour', 'day_of_week', 'month', 'is_weekend', 'aqi_change_rate']
+Note         : THIS IS THE BEST MODEL
