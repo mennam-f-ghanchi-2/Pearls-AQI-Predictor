@@ -166,9 +166,9 @@ Four regression models were trained and registered to Hopsworks Model Registry:
 | Model | MAE | R² | RMSE |
 |---|---|---|---|
 | **Ridge Regression** ⭐ | **14.08** | **0.8254** | **14.59** |
-| Random Forest | 14.20 | 0.68433 | 15.13 |
-| LightGBM | 14.18 | 0.72357 | 15.26 |
-| XGBoost | 14.17 | 0.6994 | 15.36 |
+| Random Forest | 14.20 | 0.7187 | 15.13 |
+| LightGBM | 14.18 | 0.7214 | 15.26 |
+| XGBoost | 14.17 | 0.7221 | 15.36 |
 
 >  **Best Model:** Ridge Regression — lowest MAE and RMSE, highest R²  
 > All models are registered in Hopsworks. The best model is used for inference in the Streamlit app.
