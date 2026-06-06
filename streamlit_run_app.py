@@ -802,9 +802,21 @@ def add_eda_and_shap_sections(df_hist):
                 df_model = df_model.dropna(subset=["aqi"])
                 X = df_model[available].head(200)
 
-                explainer  = shap.TreeExplainer(model)
-                shap_values = explainer.shap_values(X)
-                mean_shap  = np.abs(shap_values).mean(axis=0)
+                # Use the correct explainer based on model type.
+                # Ridge is a linear model — TreeExplainer will crash on it.
+                from sklearn.linear_model import Ridge as _Ridge
+                from sklearn.linear_model import Lasso as _Lasso
+                from sklearn.linear_model import LinearRegression as _LR
+
+                if isinstance(model, (_Ridge, _Lasso, _LR)):
+                    explainer   = shap.LinearExplainer(model, X)
+                    shap_values = explainer.shap_values(X)
+                else:
+                    # Tree-based: Random Forest, XGBoost, LightGBM
+                    explainer   = shap.TreeExplainer(model)
+                    shap_values = explainer.shap_values(X)
+
+                mean_shap = np.abs(shap_values).mean(axis=0)
 
                 shap_df = pd.DataFrame({
                     "feature":    available,
