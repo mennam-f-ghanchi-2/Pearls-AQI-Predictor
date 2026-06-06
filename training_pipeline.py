@@ -4,10 +4,14 @@
 #   1. Fetches features from MongoDB
 #   2. Trains 4 models: Random Forest, Ridge, XGBoost, LightGBM
 #   3. Evaluates all 4 with RMSE, MAE, R²
-#   4. Saves ALL 4 models to Hopsworks Model Registry
-#   5. Persists feature_cols.pkl so the Streamlit app uses
-#      the exact same feature list as training (fixes SHAP mismatch)
+#   4. Saves ALL artifacts locally FIRST (before any network calls)
+#   5. Uploads all 4 models to Hopsworks Model Registry
 #   6. Marks the best model clearly
+#
+# Key fix: feature_cols.pkl, aqi_model.pkl, and scaler.pkl are
+# saved to disk before the Hopsworks connection is attempted.
+# This guarantees the Streamlit app always has consistent artifacts
+# regardless of whether the registry upload succeeds or fails.
 # ============================================================
 
 import os
@@ -220,10 +224,48 @@ def train_all_models(X, y):
 
 # ============================================================
 # FUNCTION 5: Save ALL models to Hopsworks
+#
+# Critical fix: all local artifacts (aqi_model.pkl,
+# feature_cols.pkl, scaler.pkl, model_info.txt) are written
+# to disk BEFORE the Hopsworks connection is attempted.
+# Previously these saves were inside the try/except block,
+# meaning a network failure would silently skip them and leave
+# the Streamlit app with stale or mismatched artifacts.
 # ============================================================
 def save_all_to_registry(results, best, scaler, feature_cols):
-    print("\n☁️  Connecting to Hopsworks...")
 
+    os.makedirs("model_artifacts", exist_ok=True)
+
+    # ── Step A: Save all local artifacts unconditionally ──────
+    # These are written before any network call so the Streamlit
+    # app always has a consistent, in-sync set of files.
+
+    joblib.dump(scaler, "model_artifacts/scaler.pkl")
+    print("   ✅ Scaler saved         → model_artifacts/scaler.pkl")
+
+    joblib.dump(feature_cols, "model_artifacts/feature_cols.pkl")
+    print(f"   ✅ Feature list saved   → model_artifacts/feature_cols.pkl")
+    print(f"      Features ({len(feature_cols)}): {feature_cols}")
+
+    # Save the best model as the primary file the Streamlit app loads
+    joblib.dump(best["model"], "model_artifacts/aqi_model.pkl")
+    print(f"   ✅ Best model saved     → model_artifacts/aqi_model.pkl ({best['label']})")
+
+    with open("model_artifacts/model_info.txt", "w") as f:
+        f.write(f"Model type   : {best['name']}\n")
+        f.write(f"Is best      : True\n")
+        f.write(f"Trained at   : {datetime.utcnow()}\n")
+        f.write(f"RMSE         : {best['metrics']['rmse']:.4f}\n")
+        f.write(f"MAE          : {best['metrics']['mae']:.4f}\n")
+        f.write(f"R2           : {best['metrics']['r2']:.4f}\n")
+        f.write(f"Needs scaler : {best['needs_scaler']}\n")
+        f.write(f"Features     : {feature_cols}\n")
+        f.write(f"Note         : THIS IS THE BEST MODEL\n")
+    print("   ✅ Model info saved     → model_artifacts/model_info.txt")
+
+    # ── Step B: Attempt Hopsworks upload ──────────────────────
+    # A failure here does NOT affect the local artifacts above.
+    print("\n☁️  Connecting to Hopsworks...")
     try:
         project = hopsworks.login(
             api_key_value=HOPSWORKS_API_KEY,
@@ -232,40 +274,22 @@ def save_all_to_registry(results, best, scaler, feature_cols):
         mr = project.get_model_registry()
     except Exception as e:
         print(f"\n⚠️  Could not connect to Hopsworks: {e}")
-        print("   Models were trained successfully but could not be uploaded.")
-        print("   Check that HOPSWORKS_API_KEY and HOPSWORKS_PROJECT are set")
-        print("   as GitHub Actions secrets, and that the runner can reach")
-        print("   c.app.hopsworks.ai on port 443.")
+        print("   Local artifacts were saved successfully.")
+        print("   Registry upload skipped. Check HOPSWORKS_API_KEY,")
+        print("   HOPSWORKS_PROJECT, and network access to c.app.hopsworks.ai.")
         return
 
-    os.makedirs("model_artifacts", exist_ok=True)
-
-    # ── Save scaler (shared across all models that need it) ──
-    joblib.dump(scaler, "model_artifacts/scaler.pkl")
-    print("   ✅ Scaler saved → model_artifacts/scaler.pkl")
-
-    # ── FIX: Save the exact feature list used during training ──
-    # This ensures the Streamlit app and SHAP analysis always use
-    # the same features the model was fitted on, preventing the
-    # "number of features in data (X) != training data (Y)" error.
-    joblib.dump(feature_cols, "model_artifacts/feature_cols.pkl")
-    print(f"   ✅ Feature list saved → model_artifacts/feature_cols.pkl")
-    print(f"      Features ({len(feature_cols)}): {feature_cols}")
-
-    print(f"\n📤 Saving all 4 models to registry...")
+    print(f"\n📤 Uploading all 4 models to Hopsworks registry...")
 
     for r in results:
         is_best = (r["name"] == best["name"])
         tag     = " ⭐ BEST" if is_best else ""
-        print(f"\n   Saving {r['label']}{tag}...")
+        print(f"\n   Uploading {r['label']}{tag}...")
 
-        # Save model file
-        model_path = "model_artifacts/aqi_model.pkl"
-        joblib.dump(r["model"], model_path)
+        # Temporarily overwrite aqi_model.pkl with this model for upload
+        joblib.dump(r["model"], "model_artifacts/aqi_model.pkl")
 
-        # Save info file
-        info_path = "model_artifacts/model_info.txt"
-        with open(info_path, "w") as f:
+        with open("model_artifacts/model_info.txt", "w") as f:
             f.write(f"Model type   : {r['name']}\n")
             f.write(f"Is best      : {is_best}\n")
             f.write(f"Trained at   : {datetime.utcnow()}\n")
@@ -277,7 +301,6 @@ def save_all_to_registry(results, best, scaler, feature_cols):
             if is_best:
                 f.write(f"Note         : THIS IS THE BEST MODEL\n")
 
-        # Register in Hopsworks
         registry_name = f"aqi_{r['name']}"
         description   = f"AQI {r['label']} model"
         if is_best:
@@ -292,12 +315,14 @@ def save_all_to_registry(results, best, scaler, feature_cols):
             },
             description=description,
         )
-
         hops_model.save("model_artifacts")
-        print(f"   ✅ {r['label']} saved as '{registry_name}'")
+        print(f"   ✅ {r['label']} uploaded as '{registry_name}'")
 
-    print(f"\n✅ All 4 models saved to Hopsworks!")
-    print(f"   Go to Hopsworks → Model Registry to see them")
+    # Restore the best model as the canonical aqi_model.pkl
+    joblib.dump(best["model"], "model_artifacts/aqi_model.pkl")
+    print(f"\n✅ All 4 models uploaded to Hopsworks!")
+    print(f"   aqi_model.pkl restored to best model: {best['label']}")
+    print(f"   Go to Hopsworks → Model Registry to see all 4 models.")
 
 
 # ============================================================

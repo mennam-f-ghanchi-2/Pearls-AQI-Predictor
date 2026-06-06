@@ -1,8 +1,8 @@
-Model type   : lightgbm
+Model type   : random_forest
 Is best      : False
-Trained at   : 2026-06-05 08:35:12.164131
-RMSE         : 1.7978
-MAE          : 0.2694
-R2           : 0.9822
+Trained at   : 2026-06-06 16:22:01.322614
+RMSE         : 12.0432
+MAE          : 9.3429
+R2           : 0.7254
 Needs scaler : False
-Features     : ['pm25', 'temperature', 'humidity', 'wind_speed', 'pressure', 'hour', 'day_of_week', 'month', 'is_weekend', 'aqi_change_rate']
+Features     : ['pm25', 'pm10', 'o3', 'no2', 'so2', 'co', 'temperature', 'humidity', 'wind_speed', 'pressure', 'hour', 'day_of_week', 'month', 'is_weekend', 'aqi_change_rate']
