@@ -322,27 +322,51 @@ def get_health_advice(aqi):
         return "danger", "Health alert! Everyone may experience serious health effects. Stay indoors and keep windows closed."
     return "danger", "HAZARDOUS! Emergency conditions. Stay indoors. Seal windows and doors. Seek medical attention if unwell."
 
+
+# ============================================================
+# FIX: Load the feature list the model was actually trained on.
+# Tries feature_cols.pkl first (written by training_pipeline.py),
+# then falls back to model.feature_names_in_ (set automatically
+# by scikit-learn when fitted with a DataFrame), and finally
+# returns None so the caller can show a graceful warning.
+# ============================================================
+def load_model_feature_cols():
+    try:
+        return joblib.load("model_artifacts/feature_cols.pkl")
+    except FileNotFoundError:
+        pass
+
+    try:
+        model = joblib.load("model_artifacts/aqi_model.pkl")
+        if hasattr(model, "feature_names_in_"):
+            return model.feature_names_in_.tolist()
+    except Exception:
+        pass
+
+    return None
+
+
 @st.cache_data(ttl=300)  # refreshes every 5 minutes
 def fetch_current_aqi():
     """Aggregates data from multiple Karachi stations for a true city average."""
     try:
         stations = ["karachi", "@401143"]
         valid_data = []
-        
+
         for st_id in stations:
             url = f"https://api.waqi.info/feed/{st_id}/?token={AQICN_TOKEN}"
             r = requests.get(url, timeout=5).json()
             if r.get("status") == "ok":
                 valid_data.append(r["data"])
-                
+
         if not valid_data:
             return None
 
         avg_aqi = int(sum(d.get("aqi", 0) for d in valid_data if type(d.get("aqi")) in [int, float]) / len(valid_data))
-        
+
         avg_iaqi = {}
         pollutant_keys = ["pm25", "pm10", "o3", "no2", "so2", "co", "t", "h", "w", "p"]
-        
+
         for key in pollutant_keys:
             vals = [d.get("iaqi", {}).get(key, {}).get("v") for d in valid_data if d.get("iaqi", {}).get(key)]
             vals = [v for v in vals if v is not None]
@@ -352,12 +376,13 @@ def fetch_current_aqi():
         master_data = valid_data[0].copy()
         master_data["aqi"] = avg_aqi
         master_data["iaqi"] = avg_iaqi
-        
+
         return master_data
-        
+
     except Exception as e:
         print(f"Error fetching aggregated AQI: {e}")
         return None
+
 
 @st.cache_data(ttl=300)
 def load_historical_data():
@@ -379,6 +404,7 @@ def load_historical_data():
         pass
     return None
 
+
 @st.cache_data(ttl=300)
 def fetch_weather():
     try:
@@ -394,6 +420,7 @@ def fetch_weather():
         }
     except:
         return None
+
 
 def make_predictions(current_data):
     try:
@@ -426,6 +453,7 @@ def make_predictions(current_data):
                 "aqi": round(base * random.uniform(0.85, 1.15))
             })
         return forecasts
+
 
 # ============================================================
 # MAIN APP
@@ -532,7 +560,11 @@ if raw:
         }
     ))
 
-    fig_gauge.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', height=300, margin=dict(t=40, b=0, l=40, r=40), font=dict(family='Space Mono'))
+    fig_gauge.update_layout(
+        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+        height=300, margin=dict(t=40, b=0, l=40, r=40),
+        font=dict(family='Space Mono')
+    )
     st.plotly_chart(fig_gauge, use_container_width=True)
 
     # FORECAST
@@ -556,15 +588,26 @@ if raw:
     if df_hist is not None and len(df_hist) > 0:
         st.markdown('<div class="section-header">Historical Trend (Last 7 Days)</div>', unsafe_allow_html=True)
         fig_hist = go.Figure()
-        fig_hist.add_trace(go.Scatter(x=df_hist["timestamp"], y=df_hist["aqi"], mode='lines', name='AQI', line=dict(color='#00f5a0', width=2), fill='tozeroy', fillcolor='rgba(0, 245, 160, 0.05)'))
-        
-        fig_hist.add_hrect(y0=0,   y1=50,  fillcolor="rgba(0,228,0,0.05)",     line_width=0)
-        fig_hist.add_hrect(y0=50,  y1=100, fillcolor="rgba(255,255,0,0.05)",   line_width=0)
-        fig_hist.add_hrect(y0=100, y1=150, fillcolor="rgba(255,126,0,0.05)",   line_width=0)
-        fig_hist.add_hrect(y0=150, y1=200, fillcolor="rgba(255,0,0,0.05)",     line_width=0)
-        fig_hist.add_hrect(y0=200, y1=500, fillcolor="rgba(143,63,151,0.05)",  line_width=0)
+        fig_hist.add_trace(go.Scatter(
+            x=df_hist["timestamp"], y=df_hist["aqi"],
+            mode='lines', name='AQI',
+            line=dict(color='#00f5a0', width=2),
+            fill='tozeroy', fillcolor='rgba(0, 245, 160, 0.05)'
+        ))
 
-        fig_hist.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(19,19,26,1)', height=350, margin=dict(t=20, b=20, l=20, r=20), xaxis=dict(gridcolor='#2a2a3a', tickfont=dict(color='#8888aa', family='Space Mono', size=10), linecolor='#2a2a3a'), yaxis=dict(gridcolor='#2a2a3a', tickfont=dict(color='#8888aa', family='Space Mono', size=10), linecolor='#2a2a3a', title=dict(text="AQI", font=dict(color="#8888aa", family="Space Mono", size=10))), hovermode='x unified')
+        fig_hist.add_hrect(y0=0,   y1=50,  fillcolor="rgba(0,228,0,0.05)",    line_width=0)
+        fig_hist.add_hrect(y0=50,  y1=100, fillcolor="rgba(255,255,0,0.05)",  line_width=0)
+        fig_hist.add_hrect(y0=100, y1=150, fillcolor="rgba(255,126,0,0.05)",  line_width=0)
+        fig_hist.add_hrect(y0=150, y1=200, fillcolor="rgba(255,0,0,0.05)",    line_width=0)
+        fig_hist.add_hrect(y0=200, y1=500, fillcolor="rgba(143,63,151,0.05)", line_width=0)
+
+        fig_hist.update_layout(
+            paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(19,19,26,1)',
+            height=350, margin=dict(t=20, b=20, l=20, r=20),
+            xaxis=dict(gridcolor='#2a2a3a', tickfont=dict(color='#8888aa', family='Space Mono', size=10), linecolor='#2a2a3a'),
+            yaxis=dict(gridcolor='#2a2a3a', tickfont=dict(color='#8888aa', family='Space Mono', size=10), linecolor='#2a2a3a', title=dict(text="AQI", font=dict(color="#8888aa", family="Space Mono", size=10))),
+            hovermode='x unified'
+        )
         st.plotly_chart(fig_hist, use_container_width=True)
 
         # POLLUTANTS
@@ -572,26 +615,41 @@ if raw:
         pollutants = {
             'PM2.5': iaqi.get("pm25", {}).get("v", 0),
             'PM10':  iaqi.get("pm10", {}).get("v", 0),
-            'O3':    iaqi.get("o3", {}).get("v", 0),
-            'NO2':   iaqi.get("no2", {}).get("v", 0),
-            'SO2':   iaqi.get("so2", {}).get("v", 0),
-            'CO':    iaqi.get("co", {}).get("v", 0),
+            'O3':    iaqi.get("o3",   {}).get("v", 0),
+            'NO2':   iaqi.get("no2",  {}).get("v", 0),
+            'SO2':   iaqi.get("so2",  {}).get("v", 0),
+            'CO':    iaqi.get("co",   {}).get("v", 0),
         }
         pollutants = {k: v for k, v in pollutants.items() if v and v > 0}
         if pollutants:
-            fig_poll = go.Figure(go.Bar(x=list(pollutants.keys()), y=list(pollutants.values()), marker=dict(color=list(pollutants.values()), colorscale=[[0, '#00f5a0'], [0.5, '#ffa502'], [1, '#ff4757']], showscale=False), text=[f"{v}" for v in pollutants.values()], textposition='outside', textfont=dict(color='#8888aa', family='Space Mono', size=11)))
-            fig_poll.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(19,19,26,1)', height=280, margin=dict(t=20, b=20, l=20, r=20), xaxis=dict(gridcolor='#2a2a3a', tickfont=dict(color='#e8e8f0', family='Space Mono', size=11), linecolor='#2a2a3a'), yaxis=dict(gridcolor='#2a2a3a', tickfont=dict(color='#8888aa', family='Space Mono', size=10), linecolor='#2a2a3a'))
+            fig_poll = go.Figure(go.Bar(
+                x=list(pollutants.keys()), y=list(pollutants.values()),
+                marker=dict(
+                    color=list(pollutants.values()),
+                    colorscale=[[0, '#00f5a0'], [0.5, '#ffa502'], [1, '#ff4757']],
+                    showscale=False
+                ),
+                text=[f"{v}" for v in pollutants.values()],
+                textposition='outside',
+                textfont=dict(color='#8888aa', family='Space Mono', size=11)
+            ))
+            fig_poll.update_layout(
+                paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(19,19,26,1)',
+                height=280, margin=dict(t=20, b=20, l=20, r=20),
+                xaxis=dict(gridcolor='#2a2a3a', tickfont=dict(color='#e8e8f0', family='Space Mono', size=11), linecolor='#2a2a3a'),
+                yaxis=dict(gridcolor='#2a2a3a', tickfont=dict(color='#8888aa', family='Space Mono', size=10), linecolor='#2a2a3a')
+            )
             st.plotly_chart(fig_poll, use_container_width=True)
 
     # SCALE
     st.markdown('<div class="section-header">AQI Scale Reference</div>', unsafe_allow_html=True)
     scale_data = [
-        ("0–50",   "#00e400", "Good",                          "Air quality is satisfactory"),
-        ("51–100", "#ffff00", "Moderate",                      "Acceptable for most people"),
-        ("101–150","#ff7e00", "Unhealthy for Sensitive Groups", "Sensitive people at risk"),
-        ("151–200","#ff0000", "Unhealthy",                     "Everyone may be affected"),
-        ("201–300","#8f3f97", "Very Unhealthy",                "Health alert for everyone"),
-        ("301–500","#7e0023", "Hazardous",                     "Emergency conditions"),
+        ("0–50",   "#00e400", "Good",                           "Air quality is satisfactory"),
+        ("51–100", "#ffff00", "Moderate",                       "Acceptable for most people"),
+        ("101–150","#ff7e00", "Unhealthy for Sensitive Groups",  "Sensitive people at risk"),
+        ("151–200","#ff0000", "Unhealthy",                      "Everyone may be affected"),
+        ("201–300","#8f3f97", "Very Unhealthy",                 "Health alert for everyone"),
+        ("301–500","#7e0023", "Hazardous",                      "Emergency conditions"),
     ]
     cols = st.columns(6)
     for col, (range_str, color, label, desc) in zip(cols, scale_data):
@@ -614,12 +672,12 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+
 # ============================================================
-# EDA SECTION
+# EDA + SHAP SECTION
 # ============================================================
 def add_eda_and_shap_sections(df_hist):
     import shap
-    import matplotlib.pyplot as plt
     import matplotlib
     matplotlib.use('Agg')
 
@@ -631,62 +689,162 @@ def add_eda_and_shap_sections(df_hist):
 
     if "hour" in df_hist.columns and "aqi" in df_hist.columns:
         hourly = df_hist.groupby("hour")["aqi"].mean().reset_index()
-        fig_hour = go.Figure(go.Bar(x=hourly["hour"], y=hourly["aqi"], marker=dict(color=hourly["aqi"], colorscale=[[0, '#00f5a0'], [0.5, '#ffa502'], [1, '#ff4757']], showscale=False), text=[f"{v:.0f}" for v in hourly["aqi"]], textposition='outside', textfont=dict(color='#8888aa', family='Space Mono', size=9)))
-        fig_hour.update_layout(title=dict(text="Average AQI by Hour of Day", font=dict(color='#8888aa', family='Space Mono', size=12)), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(19,19,26,1)', height=300, margin=dict(t=40, b=20, l=20, r=20), xaxis=dict(gridcolor='#2a2a3a', tickfont=dict(color='#8888aa', family='Space Mono', size=10)), yaxis=dict(gridcolor='#2a2a3a', tickfont=dict(color='#8888aa', family='Space Mono', size=10)))
-        
+        fig_hour = go.Figure(go.Bar(
+            x=hourly["hour"], y=hourly["aqi"],
+            marker=dict(color=hourly["aqi"], colorscale=[[0, '#00f5a0'], [0.5, '#ffa502'], [1, '#ff4757']], showscale=False),
+            text=[f"{v:.0f}" for v in hourly["aqi"]], textposition='outside',
+            textfont=dict(color='#8888aa', family='Space Mono', size=9)
+        ))
+        fig_hour.update_layout(
+            title=dict(text="Average AQI by Hour of Day", font=dict(color='#8888aa', family='Space Mono', size=12)),
+            paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(19,19,26,1)',
+            height=300, margin=dict(t=40, b=20, l=20, r=20),
+            xaxis=dict(gridcolor='#2a2a3a', tickfont=dict(color='#8888aa', family='Space Mono', size=10)),
+            yaxis=dict(gridcolor='#2a2a3a', tickfont=dict(color='#8888aa', family='Space Mono', size=10))
+        )
+
         col_e1, col_e2 = st.columns(2)
-        with col_e1: st.plotly_chart(fig_hour, use_container_width=True)
+        with col_e1:
+            st.plotly_chart(fig_hour, use_container_width=True)
 
         if "day_of_week" in df_hist.columns:
             days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
             daily = df_hist.groupby("day_of_week")["aqi"].mean().reset_index()
             daily["day_name"] = daily["day_of_week"].apply(lambda x: days[x] if x < 7 else "?")
-            fig_day = go.Figure(go.Bar(x=daily["day_name"], y=daily["aqi"], marker=dict(color=daily["aqi"], colorscale=[[0, '#00f5a0'], [0.5, '#ffa502'], [1, '#ff4757']], showscale=False), text=[f"{v:.0f}" for v in daily["aqi"]], textposition='outside', textfont=dict(color='#8888aa', family='Space Mono', size=9)))
-            fig_day.update_layout(title=dict(text="Average AQI by Day of Week", font=dict(color='#8888aa', family='Space Mono', size=12)), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(19,19,26,1)', height=300, margin=dict(t=40, b=20, l=20, r=20), xaxis=dict(gridcolor='#2a2a3a', tickfont=dict(color='#8888aa', family='Space Mono', size=10)), yaxis=dict(gridcolor='#2a2a3a', tickfont=dict(color='#8888aa', family='Space Mono', size=10)))
-            with col_e2: st.plotly_chart(fig_day, use_container_width=True)
+            fig_day = go.Figure(go.Bar(
+                x=daily["day_name"], y=daily["aqi"],
+                marker=dict(color=daily["aqi"], colorscale=[[0, '#00f5a0'], [0.5, '#ffa502'], [1, '#ff4757']], showscale=False),
+                text=[f"{v:.0f}" for v in daily["aqi"]], textposition='outside',
+                textfont=dict(color='#8888aa', family='Space Mono', size=9)
+            ))
+            fig_day.update_layout(
+                title=dict(text="Average AQI by Day of Week", font=dict(color='#8888aa', family='Space Mono', size=12)),
+                paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(19,19,26,1)',
+                height=300, margin=dict(t=40, b=20, l=20, r=20),
+                xaxis=dict(gridcolor='#2a2a3a', tickfont=dict(color='#8888aa', family='Space Mono', size=10)),
+                yaxis=dict(gridcolor='#2a2a3a', tickfont=dict(color='#8888aa', family='Space Mono', size=10))
+            )
+            with col_e2:
+                st.plotly_chart(fig_day, use_container_width=True)
 
     col_e3, col_e4 = st.columns(2)
     with col_e3:
-        fig_dist = go.Figure(go.Histogram(x=df_hist["aqi"].dropna(), nbinsx=30, marker=dict(color='#00f5a0', opacity=0.7, line=dict(color='#00f5a0', width=0.5))))
-        fig_dist.update_layout(title=dict(text="AQI Distribution", font=dict(color='#8888aa', family='Space Mono', size=12)), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(19,19,26,1)', height=300, margin=dict(t=40, b=20, l=20, r=20), xaxis=dict(gridcolor='#2a2a3a', tickfont=dict(color='#8888aa', family='Space Mono', size=10)), yaxis=dict(gridcolor='#2a2a3a', tickfont=dict(color='#8888aa', family='Space Mono', size=10)))
+        fig_dist = go.Figure(go.Histogram(
+            x=df_hist["aqi"].dropna(), nbinsx=30,
+            marker=dict(color='#00f5a0', opacity=0.7, line=dict(color='#00f5a0', width=0.5))
+        ))
+        fig_dist.update_layout(
+            title=dict(text="AQI Distribution", font=dict(color='#8888aa', family='Space Mono', size=12)),
+            paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(19,19,26,1)',
+            height=300, margin=dict(t=40, b=20, l=20, r=20),
+            xaxis=dict(gridcolor='#2a2a3a', tickfont=dict(color='#8888aa', family='Space Mono', size=10)),
+            yaxis=dict(gridcolor='#2a2a3a', tickfont=dict(color='#8888aa', family='Space Mono', size=10))
+        )
         st.plotly_chart(fig_dist, use_container_width=True)
 
     with col_e4:
         if "is_weekend" in df_hist.columns:
             wk = df_hist.groupby("is_weekend")["aqi"].mean().reset_index()
             wk["label"] = wk["is_weekend"].map({0: "Weekday", 1: "Weekend"})
-            fig_wk = go.Figure(go.Bar(x=wk["label"], y=wk["aqi"], marker=dict(color=['#00d9f5', '#ffa502']), text=[f"{v:.1f}" for v in wk["aqi"]], textposition='outside', textfont=dict(color='#8888aa', family='Space Mono', size=11)))
-            fig_wk.update_layout(title=dict(text="Weekday vs Weekend AQI", font=dict(color='#8888aa', family='Space Mono', size=12)), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(19,19,26,1)', height=300, margin=dict(t=40, b=20, l=20, r=20), xaxis=dict(gridcolor='#2a2a3a', tickfont=dict(color='#e8e8f0', family='Space Mono', size=12)), yaxis=dict(gridcolor='#2a2a3a', tickfont=dict(color='#8888aa', family='Space Mono', size=10)))
+            fig_wk = go.Figure(go.Bar(
+                x=wk["label"], y=wk["aqi"],
+                marker=dict(color=['#00d9f5', '#ffa502']),
+                text=[f"{v:.1f}" for v in wk["aqi"]], textposition='outside',
+                textfont=dict(color='#8888aa', family='Space Mono', size=11)
+            ))
+            fig_wk.update_layout(
+                title=dict(text="Weekday vs Weekend AQI", font=dict(color='#8888aa', family='Space Mono', size=12)),
+                paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(19,19,26,1)',
+                height=300, margin=dict(t=40, b=20, l=20, r=20),
+                xaxis=dict(gridcolor='#2a2a3a', tickfont=dict(color='#e8e8f0', family='Space Mono', size=12)),
+                yaxis=dict(gridcolor='#2a2a3a', tickfont=dict(color='#8888aa', family='Space Mono', size=10))
+            )
             st.plotly_chart(fig_wk, use_container_width=True)
 
+    # ── SHAP SECTION ─────────────────────────────────────────
     st.markdown('<div class="section-header">Feature Importance (SHAP)</div>', unsafe_allow_html=True)
+
     try:
         model = joblib.load("model_artifacts/aqi_model.pkl")
-        feature_cols = ["pm25", "pm10", "o3", "no2", "so2", "co", "temperature", "humidity", "wind_speed", "pressure", "hour", "day_of_week", "month", "is_weekend", "aqi_change_rate"]
-        available = [c for c in feature_cols if c in df_hist.columns and df_hist[c].notna().sum() > 10]
-        df_model = df_hist[available + ["aqi"]].dropna(subset=["aqi"])
-        for col in available: df_model[col] = df_model[col].fillna(df_model[col].median())
-        X = df_model[available].head(200)
 
-        explainer = shap.TreeExplainer(model)
-        shap_values = explainer.shap_values(X)
-        mean_shap = np.abs(shap_values).mean(axis=0)
+        # FIX: Load the exact feature list the model was trained on.
+        # This replaces the old hardcoded 15-feature list which caused
+        # the "number of features (15) != training data (10)" SHAP error.
+        feature_cols = load_model_feature_cols()
 
-        shap_df = pd.DataFrame({"feature": available, "importance": mean_shap}).sort_values("importance", ascending=True)
-        fig_shap = go.Figure(go.Bar(x=shap_df["importance"], y=shap_df["feature"], orientation='h', marker=dict(color=shap_df["importance"], colorscale=[[0, '#00f5a0'], [0.5, '#00d9f5'], [1, '#ff4757']], showscale=False), text=[f"{v:.3f}" for v in shap_df["importance"]], textposition='outside', textfont=dict(color='#8888aa', family='Space Mono', size=9)))
-        fig_shap.update_layout(title=dict(text="SHAP Feature Importance", font=dict(color='#8888aa', family='Space Mono', size=11)), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(19,19,26,1)', height=400, margin=dict(t=50, b=20, l=120, r=60), xaxis=dict(gridcolor='#2a2a3a', tickfont=dict(color='#8888aa', family='Space Mono', size=9)), yaxis=dict(gridcolor='#2a2a3a', tickfont=dict(color='#e8e8f0', family='Space Mono', size=10)))
-        st.plotly_chart(fig_shap, use_container_width=True)
+        if feature_cols is None:
+            st.markdown(
+                '<div class="alert-warning">⚠️ feature_cols.pkl not found. '
+                'Re-run the training pipeline to generate it, then restart the app.</div>',
+                unsafe_allow_html=True
+            )
+        else:
+            # Only keep features that exist in the historical data with sufficient values
+            available = [
+                c for c in feature_cols
+                if c in df_hist.columns and df_hist[c].notna().sum() > 10
+            ]
 
-        st.markdown(f"""
-        <div style="background: rgba(0,245,160,0.05); border: 1px solid #00f5a033; border-radius: 12px; padding: 1rem 1.5rem; margin-top: 0.5rem;">
-            <div style="font-family: Space Mono; font-size: 0.75rem; color: #8888aa; margin-bottom: 0.5rem;">TOP FEATURES DRIVING AQI PREDICTIONS</div>
-            <div style="font-family: Space Mono; font-size: 0.85rem; color: #00f5a0;">
-                Most important: <strong>{shap_df.iloc[-1]['feature'].upper()}</strong> → {shap_df.iloc[-2]['feature'].upper()} → {shap_df.iloc[-3]['feature'].upper() if len(shap_df) > 2 else ''}
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+            if len(available) == 0:
+                st.markdown(
+                    '<div class="alert-warning">⚠️ None of the training features are present '
+                    'in the historical dataset. SHAP analysis cannot run.</div>',
+                    unsafe_allow_html=True
+                )
+            else:
+                df_model = df_hist[available + ["aqi"]].dropna(subset=["aqi"]).copy()
+                for col in available:
+                    df_model[col] = df_model[col].fillna(df_model[col].median())
+
+                X = df_model[available].head(200)
+
+                explainer  = shap.TreeExplainer(model)
+                shap_values = explainer.shap_values(X)
+                mean_shap  = np.abs(shap_values).mean(axis=0)
+
+                shap_df = pd.DataFrame({
+                    "feature":    available,
+                    "importance": mean_shap
+                }).sort_values("importance", ascending=True)
+
+                fig_shap = go.Figure(go.Bar(
+                    x=shap_df["importance"], y=shap_df["feature"],
+                    orientation='h',
+                    marker=dict(
+                        color=shap_df["importance"],
+                        colorscale=[[0, '#00f5a0'], [0.5, '#00d9f5'], [1, '#ff4757']],
+                        showscale=False
+                    ),
+                    text=[f"{v:.3f}" for v in shap_df["importance"]],
+                    textposition='outside',
+                    textfont=dict(color='#8888aa', family='Space Mono', size=9)
+                ))
+                fig_shap.update_layout(
+                    title=dict(text="SHAP Feature Importance", font=dict(color='#8888aa', family='Space Mono', size=11)),
+                    paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(19,19,26,1)',
+                    height=400, margin=dict(t=50, b=20, l=120, r=60),
+                    xaxis=dict(gridcolor='#2a2a3a', tickfont=dict(color='#8888aa', family='Space Mono', size=9)),
+                    yaxis=dict(gridcolor='#2a2a3a', tickfont=dict(color='#e8e8f0', family='Space Mono', size=10))
+                )
+                st.plotly_chart(fig_shap, use_container_width=True)
+
+                top3 = shap_df.iloc[-3:]["feature"].tolist()[::-1]
+                top3_str = " → ".join(f.upper() for f in top3)
+                st.markdown(f"""
+                <div style="background: rgba(0,245,160,0.05); border: 1px solid #00f5a033; border-radius: 12px; padding: 1rem 1.5rem; margin-top: 0.5rem;">
+                    <div style="font-family: Space Mono; font-size: 0.75rem; color: #8888aa; margin-bottom: 0.5rem;">TOP FEATURES DRIVING AQI PREDICTIONS</div>
+                    <div style="font-family: Space Mono; font-size: 0.85rem; color: #00f5a0;">
+                        Most important: <strong>{top3_str}</strong>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
     except Exception as e:
-        st.markdown(f'<div class="alert-warning">SHAP analysis not available: {str(e)[:100]}</div>', unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="alert-warning">⚠️ SHAP analysis not available: {str(e)[:120]}</div>',
+            unsafe_allow_html=True
+        )
+
 
 if df_hist is not None and raw is not None:
     add_eda_and_shap_sections(df_hist)

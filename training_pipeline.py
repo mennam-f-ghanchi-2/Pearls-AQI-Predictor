@@ -5,7 +5,9 @@
 #   2. Trains 4 models: Random Forest, Ridge, XGBoost, LightGBM
 #   3. Evaluates all 4 with RMSE, MAE, R²
 #   4. Saves ALL 4 models to Hopsworks Model Registry
-#   5. Marks the best one clearly
+#   5. Persists feature_cols.pkl so the Streamlit app uses
+#      the exact same feature list as training (fixes SHAP mismatch)
+#   6. Marks the best model clearly
 # ============================================================
 
 import os
@@ -33,6 +35,7 @@ load_dotenv()
 MONGO_URI         = os.getenv("MONGO_URI")
 HOPSWORKS_API_KEY = os.getenv("HOPSWORKS_API_KEY")
 HOPSWORKS_PROJECT = os.getenv("HOPSWORKS_PROJECT")
+
 
 # ============================================================
 # FUNCTION 1: Load features from MongoDB
@@ -68,7 +71,7 @@ def prepare_data(df):
         "aqi_change_rate"
     ]
 
-    # Only use columns that have enough data
+    # Only use columns that have enough non-null data
     available_cols = []
     for col in all_possible_features:
         if col in df.columns:
@@ -217,9 +220,6 @@ def train_all_models(X, y):
 
 # ============================================================
 # FUNCTION 5: Save ALL models to Hopsworks
-# Fix: Wrapped hopsworks.login() in try/except so that a
-# DNS or network failure in GitHub Actions does not crash
-# the pipeline and discard the training results.
 # ============================================================
 def save_all_to_registry(results, best, scaler, feature_cols):
     print("\n☁️  Connecting to Hopsworks...")
@@ -240,9 +240,17 @@ def save_all_to_registry(results, best, scaler, feature_cols):
 
     os.makedirs("model_artifacts", exist_ok=True)
 
-    # Save scaler once (shared)
-    scaler_path = "model_artifacts/scaler.pkl"
-    joblib.dump(scaler, scaler_path)
+    # ── Save scaler (shared across all models that need it) ──
+    joblib.dump(scaler, "model_artifacts/scaler.pkl")
+    print("   ✅ Scaler saved → model_artifacts/scaler.pkl")
+
+    # ── FIX: Save the exact feature list used during training ──
+    # This ensures the Streamlit app and SHAP analysis always use
+    # the same features the model was fitted on, preventing the
+    # "number of features in data (X) != training data (Y)" error.
+    joblib.dump(feature_cols, "model_artifacts/feature_cols.pkl")
+    print(f"   ✅ Feature list saved → model_artifacts/feature_cols.pkl")
+    print(f"      Features ({len(feature_cols)}): {feature_cols}")
 
     print(f"\n📤 Saving all 4 models to registry...")
 
@@ -271,8 +279,7 @@ def save_all_to_registry(results, best, scaler, feature_cols):
 
         # Register in Hopsworks
         registry_name = f"aqi_{r['name']}"
-
-        description = f"AQI {r['label']} model"
+        description   = f"AQI {r['label']} model"
         if is_best:
             description += " - BEST PERFORMING MODEL"
 
