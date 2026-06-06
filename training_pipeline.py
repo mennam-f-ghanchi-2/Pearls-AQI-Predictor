@@ -217,15 +217,26 @@ def train_all_models(X, y):
 
 # ============================================================
 # FUNCTION 5: Save ALL models to Hopsworks
+# Fix: Wrapped hopsworks.login() in try/except so that a
+# DNS or network failure in GitHub Actions does not crash
+# the pipeline and discard the training results.
 # ============================================================
 def save_all_to_registry(results, best, scaler, feature_cols):
     print("\n☁️  Connecting to Hopsworks...")
 
-    project = hopsworks.login(
-        api_key_value=HOPSWORKS_API_KEY,
-        project=HOPSWORKS_PROJECT
-    )
-    mr = project.get_model_registry()
+    try:
+        project = hopsworks.login(
+            api_key_value=HOPSWORKS_API_KEY,
+            project=HOPSWORKS_PROJECT
+        )
+        mr = project.get_model_registry()
+    except Exception as e:
+        print(f"\n⚠️  Could not connect to Hopsworks: {e}")
+        print("   Models were trained successfully but could not be uploaded.")
+        print("   Check that HOPSWORKS_API_KEY and HOPSWORKS_PROJECT are set")
+        print("   as GitHub Actions secrets, and that the runner can reach")
+        print("   c.app.hopsworks.ai on port 443.")
+        return
 
     os.makedirs("model_artifacts", exist_ok=True)
 
