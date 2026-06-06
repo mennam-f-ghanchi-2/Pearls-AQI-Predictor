@@ -793,9 +793,13 @@ def add_eda_and_shap_sections(df_hist):
                 )
             else:
                 df_model = df_hist[available + ["aqi"]].dropna(subset=["aqi"]).copy()
+                # Coerce all feature columns to numeric, turning malformed strings into NaN
                 for col in available:
+                    df_model[col] = pd.to_numeric(df_model[col], errors="coerce")
                     df_model[col] = df_model[col].fillna(df_model[col].median())
-
+                # Also coerce aqi column in case it has the same issue
+                df_model["aqi"] = pd.to_numeric(df_model["aqi"], errors="coerce")
+                df_model = df_model.dropna(subset=["aqi"])
                 X = df_model[available].head(200)
 
                 explainer  = shap.TreeExplainer(model)
