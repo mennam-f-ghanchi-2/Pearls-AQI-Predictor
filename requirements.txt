@@ -14,3 +14,4 @@ matplotlib
 pyarrow
 hopsworks==3.7.0
 streamlit-autorefresh
+nest_asyncio
